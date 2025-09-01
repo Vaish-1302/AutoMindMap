@@ -1,0 +1,152 @@
+Build a full-stack MERN application called AutoMindMap with the following requirements:
+
+🔐 Authentication & Database (Supabase)
+
+Use Supabase for user authentication and database storage.
+
+Users should be able to:
+
+Register with username, email, password, and confirm password.
+
+Login with email and password.
+
+On successful login, redirect to the Home page.
+
+Store user details (username, email, password hash) in Supabase.
+
+Store AI-generated summaries in Supabase with real-time updates.
+
+🤖 Gemini API Integration (Summarization + Explanation)
+
+In the Navbar, include a “New Summary” button.
+
+Clicking it opens a popup where user pastes a YouTube video link.
+
+On Generate Summary, call the Gemini API to generate a detailed note-style summary of the video.
+
+Save the summary in Supabase with fields:
+
+summaryId (unique ID)
+
+title
+
+date/time
+
+video link
+
+video duration
+
+AI-generated summary (detailed notes)
+
+After generation, redirect the user to the Summary Page.
+
+Additional AI Feature:
+
+If a student selects any line/paragraph in the summary, the system should call Gemini API again to re-explain that portion in simpler words.
+
+🔊 Text-to-Speech Feature
+
+Add a Text-to-Speech (TTS) option so that summaries can be listened to as audio.
+
+Implement a play/pause button inside the Summary Page.
+
+💳 Subscription System (Premium Features)
+
+Free users: Can generate summaries, view history, and bookmarks.
+
+Premium users:
+
+Access Group Chat (chatroom where subscribed students can discuss summaries).
+
+Unlimited explanations (paragraph re-explain feature).
+
+Higher quota of summaries per day.
+
+Implement a subscription model (can be simulated via Supabase user roles for now).
+
+📑 Pages & Features
+1. Home Page
+
+Layout with Sidebar, Navbar, Main area.
+
+Sidebar: Home, Bookmarks, History.
+
+Navbar: Search bar, New Summary button, Profile icon.
+
+Main Area: Show dashboard/welcome content.
+
+2. Summary Page
+
+Sidebar + Navbar same as Home.
+
+Show:
+
+Title, date/time, video link, video duration, AI summary.
+
+Options: Bookmark, Delete, Text-to-Speech playback, Re-explain selected text.
+
+3. Bookmarks Page
+
+Show all Bookmarked Summaries (list view).
+
+Clicking a summary opens the Summary Page.
+
+4. History Page
+
+Show all AI-generated summaries for logged-in user.
+
+Clicking a summary opens the Summary Page.
+
+User can delete summaries.
+
+5. Profile Page
+
+Show and allow editing of: Username, Email, Change Password.
+
+Update button saves changes to Supabase.
+
+Logout button → redirects to Login page.
+
+6. Authentication Pages
+
+Register Page: username, email, password, confirm password.
+
+Login Page: email, password.
+
+🔎 Search Functionality
+
+In Navbar, allow searching summaries by title.
+
+Search should work across Bookmarks and History.
+
+🎨 UI/UX
+
+Clean, responsive design.
+
+Frontend: React (Vite) + TailwindCSS.
+
+Sidebar + Navbar consistent across all pages.
+
+Summaries displayed in Card-based UI.
+
+⚙️ Tech Stack
+
+Frontend: React (Vite), TailwindCSS.
+
+Backend: Express + Node.js.
+
+Database & Auth: Supabase.
+
+AI: Gemini API (for video summarization + paragraph explanations).
+
+Text-to-Speech: Web Speech API or a Node.js-based TTS library.
+
+📌 Additional Notes
+
+All database actions (summary creation, bookmark, delete, profile update) must update in real-time using Supabase.
+
+Each summary should generate a detailed explanation of the video, not just short notes.
+
+Selecting a paragraph or line should trigger an AI-powered clarification.
+
+Subscription-based access should restrict group chat & unlimited explanations to paid users.
