@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Bookmark } from "lucide-react";
 
-export default function Bookmarks() {
+export default function Bookmarks({ searchQuery = "" }) {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
 
@@ -78,9 +78,15 @@ export default function Bookmarks() {
           </div>
         ) : bookmarks && bookmarks.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {bookmarks.map((summary) => (
-              <SummaryCard key={summary.id} summary={summary} />
-            ))}
+            {bookmarks
+              .filter(summary => 
+                searchQuery === "" || 
+                summary.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                summary.summary?.toLowerCase().includes(searchQuery.toLowerCase())
+              )
+              .map((summary) => (
+                <SummaryCard key={summary.id} summary={summary} />
+              ))}
           </div>
         ) : (
           <Card>

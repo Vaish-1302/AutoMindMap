@@ -1,13 +1,10 @@
 import mongoose from 'mongoose';
+import { config } from './config.js';
 
 const connectDatabase = async () => {
   try {
-    if (!process.env.MONGODB_URI) {
-      throw new Error('MONGODB_URI environment variable is not set');
-    }
-
-    const mongoUri = process.env.MONGODB_URI;
-    const dbName = process.env.DATABASE_NAME || 'automindmap';
+    const mongoUri = config.mongodb.uri;
+    const dbName = config.mongodb.dbName;
 
     await mongoose.connect(mongoUri, {
       dbName: dbName,

@@ -24,6 +24,7 @@ export async function setupVite(app: Express, server: Server) {
     middlewareMode: true,
     hmr: { server },
     allowedHosts: true as const,
+    historyApiFallback: true, // Add this to handle client-side routing
   };
 
   const vite = await createViteServer({

@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { History } from "lucide-react";
 
-export default function HistoryPage() {
+export default function HistoryPage({ searchQuery = "" }) {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
 
@@ -78,9 +78,14 @@ export default function HistoryPage() {
           </div>
         ) : summaries && summaries.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {summaries.map((summary) => (
-              <SummaryCard key={summary.id} summary={summary} showDeleteButton />
-            ))}
+            {summaries
+              .filter(summary => 
+                summary.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                summary.summary.toLowerCase().includes(searchQuery.toLowerCase())
+              )
+              .map((summary) => (
+                <SummaryCard key={summary.id} summary={summary} showDeleteButton />
+              ))}
           </div>
         ) : (
           <Card>

@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response, NextFunction, RequestHandler } from 'express';
 import User, { IUser } from '../models/User';
 
 export interface AuthRequest extends Request {
@@ -14,13 +14,14 @@ export const generateToken = (userId: string): string => {
   return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
 };
 
-export const authenticateToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const authenticateToken: RequestHandler = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
     if (!token) {
-      return res.status(401).json({ message: 'Access token required' });
+      res.status(401).json({ message: 'Access token required' });
+      return;
     }
 
     if (!process.env.JWT_SECRET) {
@@ -31,13 +32,15 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     const user = await User.findById(decoded.userId);
 
     if (!user) {
-      return res.status(401).json({ message: 'User not found' });
+      res.status(401).json({ message: 'User not found' });
+      return;
     }
 
-    req.user = user;
+    (req as AuthRequest).user = user;
     next();
   } catch (error) {
     console.error('Authentication error:', error);
-    return res.status(403).json({ message: 'Invalid token' });
+    res.status(403).json({ message: 'Invalid token' });
+    return;
   }
 };

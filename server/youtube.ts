@@ -18,43 +18,69 @@ interface YouTubeCaptionTrack {
 
 export async function getVideoDetails(videoId: string): Promise<YouTubeVideoDetails> {
   const apiKey = process.env.YOUTUBE_API_KEY;
-  if (!apiKey) {
-    throw new Error("YouTube API key not found");
+
+  // Prefer official Data API when available
+  if (apiKey) {
+    try {
+      const videoUrl = `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&key=${apiKey}&part=snippet,statistics,contentDetails`;
+      const videoResponse = await fetch(videoUrl);
+
+      if (videoResponse.ok) {
+        const videoData = await videoResponse.json();
+        if (videoData.items && videoData.items.length > 0) {
+          const video = videoData.items[0];
+
+          // Try to get captions (optional)
+          let captions = "";
+          try {
+            captions = await getVideoCaptions(videoId, apiKey);
+          } catch (error) {
+            console.log("Could not fetch captions:", error);
+          }
+
+          return {
+            title: video.snippet.title,
+            description: video.snippet.description,
+            duration: video.contentDetails.duration,
+            channelTitle: video.snippet.channelTitle,
+            publishedAt: video.snippet.publishedAt,
+            viewCount: video.statistics.viewCount,
+            captions,
+          };
+        }
+      } else {
+        console.warn("YouTube Data API returned status:", videoResponse.status);
+      }
+    } catch (err) {
+      console.warn("YouTube Data API failed, will try oEmbed fallback:", err);
+    }
   }
 
-  // Fetch video details
-  const videoUrl = `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&key=${apiKey}&part=snippet,statistics,contentDetails`;
-  const videoResponse = await fetch(videoUrl);
-  
-  if (!videoResponse.ok) {
-    throw new Error(`YouTube API error: ${videoResponse.status}`);
+  // Fallback: use public oEmbed (no API key) for basic info
+  const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+  const oembedRes = await fetch(oembedUrl);
+  if (oembedRes.ok) {
+    const oembed = await oembedRes.json();
+    return {
+      title: oembed.title,
+      description: "",
+      duration: "Unknown",
+      channelTitle: oembed.author_name || "Unknown Channel",
+      publishedAt: "",
+      viewCount: "",
+      captions: "",
+    };
   }
 
-  const videoData = await videoResponse.json();
-  
-  if (!videoData.items || videoData.items.length === 0) {
-    throw new Error("Video not found");
-  }
-
-  const video = videoData.items[0];
-  
-  // Try to get captions
-  let captions = "";
-  try {
-    captions = await getVideoCaptions(videoId, apiKey);
-  } catch (error) {
-    console.log("Could not fetch captions:", error);
-    // Captions are optional, continue without them
-  }
-
+  // Last-resort fallback: return minimal metadata instead of failing
   return {
-    title: video.snippet.title,
-    description: video.snippet.description,
-    duration: video.contentDetails.duration,
-    channelTitle: video.snippet.channelTitle,
-    publishedAt: video.snippet.publishedAt,
-    viewCount: video.statistics.viewCount,
-    captions
+    title: `YouTube Video ${videoId}`,
+    description: "",
+    duration: "Unknown",
+    channelTitle: "Unknown Channel",
+    publishedAt: "",
+    viewCount: "",
+    captions: "",
   };
 }
 

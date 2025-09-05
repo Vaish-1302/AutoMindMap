@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileText, Bookmark, Clock, Video, Plus, History } from "lucide-react";
 
-export default function Home() {
+export default function Home({ searchQuery = "" }) {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
 
@@ -22,7 +22,8 @@ export default function Home() {
         variant: "destructive",
       });
       setTimeout(() => {
-        window.location.href = "/api/login";
+        // Use client-side navigation instead of direct window.location change
+        window.location.href = "/login";
       }, 500);
       return;
     }
@@ -58,7 +59,14 @@ export default function Home() {
     return (user as User).firstName || (user as User).email?.split("@")[0] || "User";
   };
 
-  const recentSummaries = summaries ? summaries.slice(0, 4) : [];
+  // Filter summaries based on search query
+  const filteredSummaries = summaries ? summaries.filter(summary => 
+    summary.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    summary.summary.toLowerCase().includes(searchQuery.toLowerCase())
+  ) : [];
+  
+  // Get recent summaries (limited to 4) if no search query, otherwise show all filtered results
+  const recentSummaries = searchQuery ? filteredSummaries : (filteredSummaries.slice(0, 4));
 
   return (
     <Layout>
@@ -187,38 +195,7 @@ export default function Home() {
           )}
         </div>
         
-        {/* Quick Actions */}
-        <Card className="bg-gradient-to-r from-primary/10 to-secondary/10 border-border">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">
-                  Ready to learn something new?
-                </h3>
-                <p className="text-muted-foreground mb-4">
-                  Paste a YouTube video link and get an AI-powered summary in seconds
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  <Button className="bg-primary text-primary-foreground hover:bg-primary/90" data-testid="button-create-summary">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Summary
-                  </Button>
-                  <Button variant="outline" asChild data-testid="button-browse-history">
-                    <a href="/history">
-                      <History className="w-4 h-4 mr-2" />
-                      Browse History
-                    </a>
-                  </Button>
-                </div>
-              </div>
-              <div className="hidden lg:block">
-                <div className="w-24 h-24 bg-primary/20 rounded-full flex items-center justify-center">
-                  <Video className="text-primary w-8 h-8" />
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+
       </div>
     </Layout>
   );

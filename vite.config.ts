@@ -33,5 +33,7 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
+    // Add historyApiFallback to handle client-side routing
+    historyApiFallback: true,
   },
 });

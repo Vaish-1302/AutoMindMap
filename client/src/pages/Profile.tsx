@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { User as UserIcon, Crown, LogOut, Save } from "lucide-react";
 
 export default function Profile() {
@@ -59,17 +58,58 @@ export default function Profile() {
     return (first.charAt(0) + last.charAt(0)).toUpperCase() || (user as User).email?.charAt(0).toUpperCase() || "U";
   };
 
-  const handleSave = () => {
-    // Note: Profile updates would need to be implemented on the backend
-    toast({
-      title: "Profile Updated",
-      description: "Your profile information has been saved.",
-    });
+  const handleSave = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        toast({
+          title: "Error",
+          description: "You must be logged in to update your profile.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const response = await fetch("/api/auth/user", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to update profile");
+      }
+
+      const updatedUser = await response.json();
+      
+      toast({
+        title: "Profile Updated",
+        description: "Your profile information has been saved.",
+      });
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      toast({
+        title: "Update Failed",
+        description: error instanceof Error ? error.message : "Failed to update profile",
+        variant: "destructive",
+      });
+    }
   };
 
+
   const handleLogout = () => {
-    window.location.href = "/api/logout";
+    localStorage.removeItem("token");
+    window.location.href = "/";
   };
+
+  
 
   return (
     <Layout>
@@ -89,7 +129,7 @@ export default function Profile() {
           <CardHeader>
             <div className="flex items-center space-x-4">
               <Avatar className="w-16 h-16">
-                <AvatarImage src={(user as User)?.profileImageUrl} />
+                <AvatarImage src={(user as User)?.profileImageUrl || undefined} />
                 <AvatarFallback className="bg-secondary text-secondary-foreground text-lg">
                   {getUserInitials()}
                 </AvatarFallback>
@@ -104,18 +144,7 @@ export default function Profile() {
                 <p className="text-muted-foreground" data-testid="text-profile-email">
                   {(user as User)?.email}
                 </p>
-                <div className="flex items-center space-x-2 mt-2">
-                  <Badge variant={(user as User)?.isPremium ? "default" : "secondary"} data-testid="badge-subscription">
-                    {(user as User)?.isPremium ? (
-                      <>
-                        <Crown className="w-3 h-3 mr-1" />
-                        Premium
-                      </>
-                    ) : (
-                      "Free Plan"
-                    )}
-                  </Badge>
-                </div>
+                
               </div>
             </div>
           </CardHeader>
@@ -182,23 +211,6 @@ export default function Profile() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {!(user as User)?.isPremium && (
-                <>
-                  <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-                    <div>
-                      <h4 className="font-medium text-foreground">Upgrade to Premium</h4>
-                      <p className="text-sm text-muted-foreground">
-                        Get unlimited explanations, group chat access, and higher quotas
-                      </p>
-                    </div>
-                    <Button variant="outline" data-testid="button-upgrade">
-                      <Crown className="w-4 h-4 mr-2" />
-                      Upgrade
-                    </Button>
-                  </div>
-                  <Separator />
-                </>
-              )}
               
               <div className="flex items-center justify-between">
                 <div>
@@ -216,6 +228,8 @@ export default function Profile() {
                   Sign Out
                 </Button>
               </div>
+
+              
             </div>
           </CardContent>
         </Card>

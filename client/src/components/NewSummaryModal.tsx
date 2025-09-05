@@ -102,6 +102,7 @@ export function NewSummaryModal({ open, onOpenChange }: NewSummaryModalProps) {
             <Sparkles className="w-5 h-5 text-primary" />
             Create New Summary
           </DialogTitle>
+          <p className="sr-only" id="new-summary-desc">Paste a YouTube link and generate an AI video summary.</p>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">

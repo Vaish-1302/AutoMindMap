@@ -8,6 +8,8 @@ export interface IUser extends Document {
   lastName: string;
   profileImageUrl?: string;
   isPremium: boolean;
+  resetPasswordToken?: string;
+  resetPasswordExpires?: Date;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -43,6 +45,14 @@ const userSchema = new Schema<IUser>({
   isPremium: {
     type: Boolean,
     default: false
+  },
+  resetPasswordToken: {
+    type: String,
+    default: undefined
+  },
+  resetPasswordExpires: {
+    type: Date,
+    default: undefined
   }
 }, {
   timestamps: true

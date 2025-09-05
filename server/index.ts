@@ -1,4 +1,6 @@
+import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
+import path from "path";
 import { registerRoutes } from "./newRoutes";
 import { setupVite, serveStatic, log } from "./vite";
 
@@ -54,6 +56,11 @@ app.use((req, res, next) => {
     await setupVite(app, server);
   } else {
     serveStatic(app);
+    
+    // Add a fallback route handler for client-side routing in production
+    app.get('*', (_req, res) => {
+      res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
+    });
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
@@ -61,11 +68,13 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+  const host = "0.0.0.0";
+  const listenOptions: any = { port, host };
+  // reusePort is not supported on Windows; enable only on supported platforms
+  if (process.platform !== 'win32') {
+    listenOptions.reusePort = true;
+  }
+  server.listen(listenOptions, () => {
     log(`serving on port ${port}`);
   });
 })();

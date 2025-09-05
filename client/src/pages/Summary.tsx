@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,6 +10,13 @@ import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
   Calendar, 
@@ -31,9 +38,12 @@ export default function Summary() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isPlaying, setIsPlaying] = useState(false);
+  const userCanceledRef = useRef(false);
   const [selectedText, setSelectedText] = useState("");
   const [showExplanation, setShowExplanation] = useState(false);
   const [explanation, setExplanation] = useState("");
+  const [lengthMode, setLengthMode] = useState<"short" | "medium" | "long">("short");
+  const audioLanguage = "en-US";
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -55,8 +65,8 @@ export default function Summary() {
   });
 
   const explainTextMutation = useMutation({
-    mutationFn: async (text: string) => {
-      const response = await apiRequest("POST", "/api/explain", { text });
+    mutationFn: async (payload: { text: string; mode: "short" | "medium" | "long" }) => {
+      const response = await apiRequest("POST", "/api/explain", payload);
       return response.json();
     },
     onSuccess: (data) => {
@@ -119,36 +129,121 @@ export default function Summary() {
   const handleTextSelection = () => {
     const selection = window.getSelection();
     const text = selection?.toString().trim();
-    if (text && text.length > 10) {
+    if (text && text.length >= 5) {
       setSelectedText(text);
-      if (!(user as User)?.isPremium && !window.confirm("This is a premium feature. Upgrade to get unlimited explanations. Continue with limited usage?")) {
-        return;
+      // Determine default mode based on selection size
+      const charCount = text.length;
+      const lineCount = text.split(/\r?\n/).filter(Boolean).length;
+      if (lineCount > 1 || charCount > 250) {
+        setLengthMode("long");
+      } else if (charCount <= 80) {
+        setLengthMode("short");
+      } else {
+        setLengthMode("medium");
       }
-      explainTextMutation.mutate(text);
+      setShowExplanation(true);
+      // Don't auto-call; user picks length first
+    } else if (text && text.length > 0) {
+      toast({
+        title: "Select more text",
+        description: "Please select at least 5 characters to explain.",
+        variant: "destructive",
+      });
     }
   };
 
-  const handleTTS = () => {
+  // Function to generate explanation for TTS
+  const generateExplanation = async (text: string): Promise<string> => {
+    try {
+      // Request a detailed but easily understandable explanation that covers the entire content
+      // and is timed to be between 1-2 minutes when spoken
+      const response = await apiRequest("POST", "/api/explain", { 
+        text, 
+        mode: "comprehensive",
+        style: "accessible", // Request accessible explanation that's easy to understand
+        duration: "1-2min", // Target 1-2 minute audio duration
+        coverage: "complete" // Ensure complete coverage of content
+      });
+      const data = await response.json();
+      
+      // Get the base explanation
+      let explanation = data.explanation || "No explanation available.";
+      
+      // Add a brief introduction for the audio explanation
+      const intro = "Here's a detailed explanation of this content. ";
+      
+      // Add a concise conclusion to the explanation
+      const conclusion = " That covers the key points. Thanks for listening.";
+      
+      explanation = intro + explanation + conclusion;
+      
+      return explanation;
+    } catch (error) {
+      console.error("Error generating explanation:", error);
+      return "Failed to generate explanation. Please try again.";
+    }
+  };
+
+  const handleTTS = async () => {
     if (!summary) return;
     
     if ('speechSynthesis' in window) {
+      // If currently speaking, toggle pause
       if (isPlaying) {
-        speechSynthesis.cancel();
+        window.speechSynthesis.pause();
         setIsPlaying(false);
-      } else {
-        const utterance = new SpeechSynthesisUtterance(summary?.summary || "");
-        utterance.onend = () => setIsPlaying(false);
-        utterance.onerror = () => {
-          setIsPlaying(false);
-          toast({
-            title: "TTS Error",
-            description: "Failed to play text-to-speech. Please try again.",
-            variant: "destructive",
-          });
-        };
-        speechSynthesis.speak(utterance);
-        setIsPlaying(true);
+        return;
       }
+
+      // If paused, resume
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+        setIsPlaying(true);
+        return;
+      }
+
+      // Clear any queued/leftover utterances before starting fresh
+      try { window.speechSynthesis.cancel(); } catch {}
+      
+      // Generate a detailed explanation instead of just reading the summary
+      const textToSpeak = await generateExplanation(summary.summary);
+      
+      const utterance = new SpeechSynthesisUtterance(textToSpeak);
+      
+      // Set the language based on user selection
+      utterance.lang = audioLanguage;
+      
+      // Find a voice that matches the selected language
+      const availableVoices = window.speechSynthesis.getVoices();
+      const preferred = availableVoices.find(v => (v.lang || "").toLowerCase().startsWith(audioLanguage.split('-')[0])) || availableVoices[0];
+      if (preferred) utterance.voice = preferred;
+      
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      userCanceledRef.current = false;
+      utterance.onend = () => {
+        setIsPlaying(false);
+        userCanceledRef.current = false;
+      };
+      utterance.onpause = () => setIsPlaying(false);
+      utterance.onresume = () => setIsPlaying(true);
+      utterance.onerror = (e: SpeechSynthesisErrorEvent) => {
+        setIsPlaying(false);
+        const err = (e as any)?.error;
+        // Suppress benign errors when paused/resumed/interrupted by user or system
+        if (window.speechSynthesis.paused || err === "canceled" || err === "interrupted") {
+          return;
+        }
+        toast({
+          title: "TTS Error",
+          description: "Failed to play text-to-speech. Please try again.",
+          variant: "destructive",
+        });
+      };
+      window.speechSynthesis.speak(utterance);
+      setIsPlaying(true);
+      
     } else {
       toast({
         title: "Not Supported",
@@ -241,24 +336,27 @@ export default function Summary() {
 
         {/* Action Buttons */}
         <div className="flex items-center space-x-3 mb-6">
-          <Button
-            variant="outline"
-            onClick={handleTTS}
-            disabled={!summary.summary}
-            data-testid="button-tts"
-          >
-            {isPlaying ? (
-              <>
-                <Pause className="w-4 h-4 mr-2" />
-                Pause
-              </>
-            ) : (
-              <>
-                <Play className="w-4 h-4 mr-2" />
-                Listen
-              </>
-            )}
-          </Button>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              onClick={handleTTS}
+              disabled={!summary.summary}
+              data-testid="button-tts"
+              className="flex items-center gap-2"
+            >
+              {isPlaying ? (
+                <>
+                  <Pause className="w-4 h-4" />
+                  Pause Audio Explanation
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4" />
+                  Listen to Enhanced Audio Explanation
+                </>
+              )}
+            </Button>
+          </div>
           <Button
             variant="outline"
             onClick={() => deleteSummaryMutation.mutate()}
@@ -302,16 +400,33 @@ export default function Summary() {
           </CardContent>
         </Card>
 
+
+
         {/* Explanation Modal */}
         <Dialog open={showExplanation} onOpenChange={setShowExplanation}>
           <DialogContent className="sm:max-w-lg" data-testid="modal-explanation">
             <DialogHeader>
               <DialogTitle>Simplified Explanation</DialogTitle>
+              <p className="sr-only" id="explain-desc">Choose a length and generate a simpler explanation for the selected text.</p>
             </DialogHeader>
             <div className="space-y-4">
               <div className="p-3 bg-muted rounded-md">
                 <p className="text-sm font-medium text-foreground mb-1">Selected Text:</p>
                 <p className="text-sm text-muted-foreground italic">"{selectedText}"</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Length:</span>
+                <Button variant={lengthMode === "short" ? "default" : "outline"} size="sm" onClick={() => setLengthMode("short")}>Short</Button>
+                <Button variant={lengthMode === "medium" ? "default" : "outline"} size="sm" onClick={() => setLengthMode("medium")}>Medium</Button>
+                <Button variant={lengthMode === "long" ? "default" : "outline"} size="sm" onClick={() => setLengthMode("long")}>Long</Button>
+                <Button
+                  className="ml-auto"
+                  size="sm"
+                  onClick={() => explainTextMutation.mutate({ text: selectedText, mode: lengthMode })}
+                  disabled={explainTextMutation.isPending}
+                >
+                  {explainTextMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Generate"}
+                </Button>
               </div>
               <div className="space-y-2">
                 <p className="text-sm font-medium text-foreground">Explanation:</p>

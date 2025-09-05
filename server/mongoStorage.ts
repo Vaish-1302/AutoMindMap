@@ -1,23 +1,183 @@
-import User, { IUser } from './models/User';
+import mongoose from 'mongoose';
+import Chat, { IChat, IMessage } from './models/Chat';
+import User from './models/User';
+import { IUser } from './models/User';
 import Summary, { ISummary } from './models/Summary';
 import Bookmark, { IBookmark } from './models/Bookmark';
-import mongoose from 'mongoose';
 
+export interface IChatStorage {
+  // Chat operations
+  createChat(userId: string, title: string): Promise<IChat>;
+  getChat(chatId: string, userId: string): Promise<IChat | null>;
+  getUserChats(userId: string): Promise<IChat[]>;
+  addMessage(chatId: string, userId: string, message: Omit<IMessage, 'timestamp'>): Promise<IChat>;
+  updateChatTitle(chatId: string, userId: string, title: string): Promise<IChat>;
+  deleteChat(chatId: string, userId: string): Promise<void>;
+  starChat(chatId: string, userId: string): Promise<IChat>;
+  unstarChat(chatId: string, userId: string): Promise<IChat>;
+}
+
+export class MongoChatStorage implements IChatStorage {
+  async starChat(chatId: string, userId: string): Promise<IChat> {
+    const chat = await Chat.findOneAndUpdate(
+      {
+        _id: chatId,
+        userId: new mongoose.Types.ObjectId(userId)
+      },
+      {
+        $set: { 
+          isStarred: true,
+          updatedAt: new Date()
+        }
+      },
+      { new: true }
+    );
+
+    if (!chat) {
+      throw new Error('Chat not found or access denied');
+    }
+
+    return chat;
+  }
+
+  async unstarChat(chatId: string, userId: string): Promise<IChat> {
+    const chat = await Chat.findOneAndUpdate(
+      {
+        _id: chatId,
+        userId: new mongoose.Types.ObjectId(userId)
+      },
+      {
+        $set: { 
+          isStarred: false,
+          updatedAt: new Date()
+        }
+      },
+      { new: true }
+    );
+
+    if (!chat) {
+      throw new Error('Chat not found or access denied');
+    }
+
+    return chat;
+  }
+  async createChat(userId: string, title: string): Promise<IChat> {
+    const chat = new Chat({
+      userId: new mongoose.Types.ObjectId(userId),
+      title,
+      messages: []
+    });
+    
+    return await chat.save();
+  }
+
+  async getChat(chatId: string, userId: string): Promise<IChat | null> {
+    return await Chat.findOne({
+      _id: chatId,
+      userId: new mongoose.Types.ObjectId(userId)
+    });
+  }
+
+  async getUserChats(userId: string): Promise<IChat[]> {
+    return await Chat.find({
+      userId: new mongoose.Types.ObjectId(userId)
+    })
+    .sort({ updatedAt: -1 })
+    .limit(50); // Limit to prevent overwhelming the UI
+  }
+
+  async addMessage(chatId: string, userId: string, message: Omit<IMessage, 'timestamp'>): Promise<IChat> {
+    const chat = await Chat.findOneAndUpdate(
+      {
+        _id: chatId,
+        userId: new mongoose.Types.ObjectId(userId)
+      },
+      {
+        $push: {
+          messages: {
+            ...message,
+            timestamp: new Date()
+          }
+        },
+        $set: { updatedAt: new Date() }
+      },
+      { new: true }
+    );
+
+    if (!chat) {
+      throw new Error('Chat not found or access denied');
+    }
+
+    return chat;
+  }
+
+  async updateChatTitle(chatId: string, userId: string, title: string): Promise<IChat> {
+    const chat = await Chat.findOneAndUpdate(
+      {
+        _id: chatId,
+        userId: new mongoose.Types.ObjectId(userId)
+      },
+      {
+        $set: { 
+          title,
+          updatedAt: new Date()
+        }
+      },
+      { new: true }
+    );
+
+    if (!chat) {
+      throw new Error('Chat not found or access denied');
+    }
+
+    return chat;
+  }
+
+  async deleteChat(chatId: string, userId: string): Promise<void> {
+    const result = await Chat.deleteOne({
+      _id: chatId,
+      userId: new mongoose.Types.ObjectId(userId)
+    });
+
+    if (result.deletedCount === 0) {
+      throw new Error('Chat not found or access denied');
+    }
+  }
+
+
+}
+
+export const chatStorage = new MongoChatStorage();
+
+// Original mongoStorage for existing functionality
 export class MongoStorage {
+  private normalizeSummary(summary: ISummary) {
+    const obj = summary.toObject({ getters: false, virtuals: false });
+    const { _id, __v, ...rest } = obj as any;
+    return { id: (_id as any).toString(), ...rest };
+  }
+
   // User operations
   async getUser(userId: string): Promise<IUser | null> {
     return await User.findById(userId).select('-password');
   }
 
   async upsertUser(userData: {
+    id?: string;
     email: string;
     firstName: string;
     lastName: string;
     profileImageUrl?: string;
   }): Promise<IUser> {
+    // If ID is provided, use it for lookup, otherwise use email
+    const query = userData.id ? { _id: userData.id } : { email: userData.email };
+    
+    // Remove id from userData if it exists to avoid MongoDB errors
+    const { id, ...updateData } = userData;
+    
     return await User.findOneAndUpdate(
-      { email: userData.email },
-      userData,
+      query,
+      updateData,
       { upsert: true, new: true, select: '-password' }
     );
   }
@@ -29,12 +189,13 @@ export class MongoStorage {
     videoUrl: string;
     videoDuration?: string;
     summary: string;
-  }): Promise<ISummary> {
+  }): Promise<any> {
     const summary = new Summary({
       ...summaryData,
       userId: new mongoose.Types.ObjectId(summaryData.userId)
     });
-    return await summary.save();
+    const saved = await summary.save();
+    return this.normalizeSummary(saved);
   }
 
   async getUserSummaries(userId: string): Promise<Array<any>> {
@@ -45,13 +206,14 @@ export class MongoStorage {
     const bookmarkedSummaryIds = bookmarks.map(b => b.summaryId.toString());
 
     return summaries.map(summary => ({
-      ...summary.toObject(),
+      ...this.normalizeSummary(summary),
       isBookmarked: bookmarkedSummaryIds.includes((summary._id as any).toString())
     }));
   }
 
-  async getSummary(summaryId: string): Promise<ISummary | null> {
-    return await Summary.findById(summaryId);
+  async getSummary(summaryId: string): Promise<any | null> {
+    const summary = await Summary.findById(summaryId);
+    return summary ? this.normalizeSummary(summary) : null;
   }
 
   async deleteSummary(summaryId: string, userId: string): Promise<void> {
@@ -61,6 +223,13 @@ export class MongoStorage {
     });
     // Also delete associated bookmarks
     await Bookmark.deleteMany({ summaryId: summaryId });
+  }
+
+  async updateSummaryMeta(summaryId: string, userId: string, fields: { title?: string; videoDuration?: string }): Promise<void> {
+    await Summary.updateOne(
+      { _id: summaryId, userId: new mongoose.Types.ObjectId(userId) },
+      { $set: { ...fields } }
+    );
   }
 
   async searchSummaries(userId: string, query: string): Promise<ISummary[]> {
@@ -118,9 +287,16 @@ export class MongoStorage {
       return acc;
     }, {} as Record<string, number>);
 
+    // Align response shape with client expectations
+    // - bookmarkedCount: number of bookmarks
+    // - hoursSaved: rough estimate at 0.5h per summary
+    const hoursSaved = Math.round((totalSummaries * 0.5) * 10) / 10;
+
     return {
       totalSummaries,
-      totalBookmarks,
+      bookmarkedCount: totalBookmarks,
+      hoursSaved,
+      // Keep dailyActivity for potential future use
       dailyActivity: Object.entries(dailyStats).map(([date, count]) => ({
         date,
         summaries: count
