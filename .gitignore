@@ -1,7 +1,41 @@
+# Dependencies
 node_modules
 dist
+
+# Environment variables and secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS files
 .DS_Store
+
+# Server files
 server/public
+
+# Build files
 vite.config.ts.*
 *.tar.gz
 .local/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Misc
+.cache/
+.temp/
+.tmp/
+temp/
+tmp/
